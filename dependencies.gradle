@@ -36,4 +36,6 @@
 dependencies {
     //runtimeOnlyNonPublishable("com.github.GTNewHorizons:NotEnoughItems:2.7.69-GTNH:dev")
     compileOnlyApi files("libs/archaicfix-0.7.7-dev.jar")
+
+    //runtimeOnlyNonPublishable files("libs/u25core-1.3.3-main+02007b157a-dirty-dev.jar")
 }

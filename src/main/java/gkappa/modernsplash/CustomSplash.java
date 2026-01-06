@@ -58,10 +58,6 @@ import cpw.mods.fml.common.ProgressManager;
 import cpw.mods.fml.common.ProgressManager.ProgressBar;
 import cpw.mods.fml.common.asm.FMLSanityChecker;
 
-/**
- * @deprecated not a stable API, will break, don't use this yet
- */
-
 public class CustomSplash {
 
     public static Drawable d;
@@ -414,6 +410,10 @@ public class CustomSplash {
             }
 
             public String getForgeVersionString() {
+                if (System.getProperty("modpack.gitrev") != null) {
+                    return System.getProperty("modpack.gitrev");
+                }
+
                 String mcVersion = Loader.instance()
                     .getMinecraftModContainer()
                     .getVersion();

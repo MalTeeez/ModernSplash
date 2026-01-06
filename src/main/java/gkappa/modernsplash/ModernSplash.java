@@ -83,11 +83,10 @@ public class ModernSplash {
     @SideOnly(Side.CLIENT)
     @SubscribeEvent
     public void onGuiDraw(GuiScreenEvent.DrawScreenEvent event) {
-        if (!hasLeftMainMenu && CustomSplash.enableTimer && event.gui instanceof GuiMainMenu) {
+        if (!hasLeftMainMenu && CustomSplash.enableTimer && event.gui instanceof GuiMainMenu mainMenu) {
             hasBeenMainMenu = true;
 
             if (CustomSplash.displayStartupTimeOnMainMenu) {
-                GuiMainMenu mainMenu = (GuiMainMenu) event.gui;
                 long minutes = (startupTime / 1000) / 60;
                 long seconds = (startupTime / 1000) % 60;
 
