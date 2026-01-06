@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.io.PrintWriter;
-import java.lang.Thread.UncaughtExceptionHandler;
 import java.lang.management.ManagementFactory;
 import java.nio.IntBuffer;
 import java.time.LocalDateTime;
@@ -39,6 +38,7 @@ import net.minecraft.util.ResourceLocation;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.Level;
+import org.embeddedt.archaicfix.config.ArchaicConfig;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.LWJGLException;
 import org.lwjgl.opengl.Display;
@@ -52,6 +52,8 @@ import cpw.mods.fml.common.EnhancedRuntimeException;
 import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.FMLLog;
 import cpw.mods.fml.common.ICrashCallable;
+import cpw.mods.fml.common.Loader;
+import cpw.mods.fml.common.ModContainer;
 import cpw.mods.fml.common.ProgressManager;
 import cpw.mods.fml.common.ProgressManager.ProgressBar;
 import cpw.mods.fml.common.asm.FMLSanityChecker;
@@ -62,62 +64,64 @@ import cpw.mods.fml.common.asm.FMLSanityChecker;
 
 public class CustomSplash {
 
-    private static Drawable d;
-    private static volatile boolean pause = false;
-    private static volatile boolean done = false;
-    private static Thread thread;
-    private static volatile Throwable threadError;
-    private static int angle = 0;
-    private static final Lock lock = new ReentrantLock(true);
-    private static SplashFontRenderer fontRenderer;
+    public static Drawable d;
+    public static volatile boolean pause = false;
+    public static volatile boolean done = false;
+    public static Thread thread;
+    public static volatile Throwable threadError;
+    public static int angle = 0;
+    public static int Frame = 120;
+    public static final Lock lock = new ReentrantLock(true);
+    public static SplashFontRenderer fontRenderer;
 
-    private static final IResourcePack mcPack = Minecraft.getMinecraft().mcDefaultResourcePack;
-    private static final IResourcePack fmlPack = createResourcePack(FMLSanityChecker.fmlLocation);
-    private static IResourcePack miscPack;
+    public static final IResourcePack mcPack = Minecraft.getMinecraft().mcDefaultResourcePack;
+    public static final IResourcePack fmlPack = createResourcePack(FMLSanityChecker.fmlLocation);
+    public static IResourcePack miscPack;
 
-    private static Texture fontTexture;
-    private static Texture logoTexture;
-    private static Texture forgeTexture;
+    public static Texture fontTexture;
+    public static Texture logoTexture;
+    public static Texture forgeTexture;
 
-    private static Properties config;
+    public static Properties config;
 
-    private static boolean enabled;
-    private static boolean forgeLogo;
-    private static boolean rotate;
-    private static int logoOffset;
-    private static int backgroundColor;
-    private static int fontColor;
-    private static int logoColor;
-    private static int barBorderColor;
-    private static int barColor;
-    private static int barBackgroundColor;
-    private static boolean showMemory;
-    private static boolean showTotalMemoryLine;
+    public static boolean enabled;
+    public static boolean forgeLogo;
+    public static boolean rotate;
+    public static int logoOffset;
+    public static int backgroundColor;
+    public static int fontColor;
+    public static int logoColor;
+    public static int barBorderColor;
+    public static int barColor;
+    public static int barBackgroundColor;
+    public static boolean showMemory;
+    public static boolean showArchFixMemory;
+    public static boolean showTotalMemoryLine;
 
     public static boolean displayStartupTimeOnMainMenu = true;
     public static boolean enableTimer = true;
-    private static int memoryGoodColor;
-    private static int memoryWarnColor;
-    private static int memoryLowColor;
-    private static float memoryColorPercent;
-    private static long memoryColorChangeTime;
+    public static int memoryGoodColor;
+    public static int memoryWarnColor;
+    public static int memoryLowColor;
+    public static float memoryColorPercent;
+    public static long memoryColorChangeTime;
     public static final Semaphore mutex = new Semaphore(1);
 
-    private static String getString(String name, String def) {
+    public static String getString(String name, String def) {
         String value = config.getProperty(name, def);
         config.setProperty(name, value);
         return value;
     }
 
-    private static boolean getBool(String name, boolean def) {
+    public static boolean getBool(String name, boolean def) {
         return Boolean.parseBoolean(getString(name, Boolean.toString(def)));
     }
 
-    private static int getInt(String name, int def) {
+    public static int getInt(String name, int def) {
         return Integer.decode(getString(name, Integer.toString(def)));
     }
 
-    private static int getHex(String name, int def) {
+    public static int getHex(String name, int def) {
         return Integer.decode(
             getString(
                 name,
@@ -150,6 +154,7 @@ public class CustomSplash {
         rotate = getBool("rotate", false);
         forgeLogo = getBool("forgeLogo", false);
         showMemory = getBool("showMemory", true);
+        showArchFixMemory = getBool("showArchFixMemory", true);
         showTotalMemoryLine = getBool("showTotalMemoryLine", false);
         enableTimer = getBool("enableTimer", true);
 
@@ -161,9 +166,9 @@ public class CustomSplash {
         barBorderColor = getHex("barBorder", 0xFFFFFF);
         barColor = getHex("bar", 0xFFFFFF);
         barBackgroundColor = getHex("barBackground", 0xEF323D);
-        memoryGoodColor = getHex("memoryGood", 0xFFFFFF);
-        memoryWarnColor = getHex("memoryWarn", 0xFFFFFF);
-        memoryLowColor = getHex("memoryLow", 0xFFFFFF);
+        memoryGoodColor = getHex("memoryGood", 0x337D23);
+        memoryWarnColor = getHex("memoryWarn", 0x337D23);
+        memoryLowColor = getHex("memoryLow", 0x337D23);
 
         displayStartupTimeOnMainMenu = getBool("timeOnMainMenu", true);
 
@@ -195,7 +200,8 @@ public class CustomSplash {
             memoryLowColor = memoryLowColorNight;
         }
         final ResourceLocation fontLoc = new ResourceLocation(getString("fontTexture", "textures/font/ascii.png"));
-        final ResourceLocation logoLoc = new ResourceLocation("modernsplash:textures/gui/title/mojang.png");
+        final ResourceLocation logoLoc = new ResourceLocation(
+            getString("logoTexture", "modernsplash:textures/gui/title/mojang.png"));
         final ResourceLocation forgeLoc = new ResourceLocation(getString("forgeTexture", "fml:textures/gui/forge.gif"));
 
         File miscPackFile = new File(Minecraft.getMinecraft().mcDataDir, getString("resourcePackPath", "resources"));
@@ -217,7 +223,7 @@ public class CustomSplash {
         FMLCommonHandler.instance()
             .registerCrashCallable(new ICrashCallable() {
 
-                public String call() throws Exception {
+                public String call() {
                     return "' Vendor: '" + glGetString(GL_VENDOR)
                         + "' Version: '"
                         + glGetString(GL_VERSION)
@@ -261,10 +267,10 @@ public class CustomSplash {
         Thread mainThread = Thread.currentThread();
         thread = new Thread(new Runnable() {
 
-            private final int barWidth = 400;
-            private final int barHeight = 20;
-            private final int textHeight2 = 20;
-            private final int barOffset = 45;
+            public final int barWidth = 400;
+            public final int barHeight = 20;
+            public final int textHeight2 = 20;
+            public final int barOffset = 45;
 
             public void run() {
                 setGL();
@@ -287,83 +293,85 @@ public class CustomSplash {
 
                     glClear(GL_COLOR_BUFFER_BIT);
 
-                    // matrix setup
                     int w = Display.getWidth();
                     int h = Display.getHeight();
+                    float scale = Math.min(w / 640f, h / 480f);
+                    float centerX = w / 2f;
+                    float centerY = h / 2f;
+
                     glViewport(0, 0, w, h);
                     glMatrixMode(GL_PROJECTION);
                     glLoadIdentity();
-                    glOrtho(320 - w / 2, 320 + w / 2, 240 + h / 2, 240 - h / 2, -1, 1);
+                    glOrtho(0, w, h, 0, -1, 1);
                     glMatrixMode(GL_MODELVIEW);
                     glLoadIdentity();
 
-                    // mojang logo
+                    float logoSize = 256 * scale;
                     setColor(logoColor);
                     glEnable(GL_TEXTURE_2D);
                     logoTexture.bind();
                     glBegin(GL_QUADS);
                     logoTexture.texCoord(0, 0, 0);
-                    glVertex2f(320 - 256, 240 - 256);
+                    glVertex2f(centerX - logoSize, centerY - logoSize);
                     logoTexture.texCoord(0, 0, 1);
-                    glVertex2f(320 - 256, 240 + 256);
+                    glVertex2f(centerX - logoSize, centerY + logoSize);
                     logoTexture.texCoord(0, 1, 1);
-                    glVertex2f(320 + 256, 240 + 256);
+                    glVertex2f(centerX + logoSize, centerY + logoSize);
                     logoTexture.texCoord(0, 1, 0);
-                    glVertex2f(320 + 256, 240 - 256);
+                    glVertex2f(centerX + logoSize, centerY - logoSize);
                     glEnd();
                     glDisable(GL_TEXTURE_2D);
 
                     if (showMemory) {
                         glPushMatrix();
-                        glTranslatef(320 - (float) barWidth / 2, 20, 0);
+                        glTranslatef(centerX - (400 * scale) / 2, 20 * scale, 0);
+                        glScalef(scale, scale, 1);
                         drawMemoryBar();
                         glPopMatrix();
                     }
 
-                    // timer
                     if (enableTimer) {
                         glPushMatrix();
                         setColor(fontColor);
-                        glTranslatef(320 - Display.getWidth() / 2 + 4, 240 + Display.getHeight() / 2 - textHeight2, 0);
-                        glScalef(2, 2, 1);
+                        glTranslatef(4 * scale, h - 20 * scale, 0);
+                        glScalef(2 * scale, 2 * scale, 1);
                         glEnable(GL_TEXTURE_2D);
-                        String renderString = getString();
-                        fontRenderer.drawString(renderString, 0, 0, fontColor);
+                        fontRenderer.drawString(getString(), 0, 0, fontColor);
                         glDisable(GL_TEXTURE_2D);
                         glPopMatrix();
                     }
 
-                    // bars
                     if (first != null) {
                         glPushMatrix();
-                        glTranslatef(320 - (float) barWidth / 2, 310, 0);
+                        glTranslatef(centerX - (400 * scale) / 2, h - 180 * scale, 0);
+                        glScalef(scale, scale, 1);
                         drawBar(first);
                         if (penult != null) {
-                            glTranslatef(0, barOffset, 0);
+                            glTranslatef(0, 45, 0);
                             drawBar(penult);
                         }
                         if (last != null) {
-                            glTranslatef(0, barOffset, 0);
+                            glTranslatef(0, 45, 0);
                             drawBar(last);
                         }
                         glPopMatrix();
                     }
 
-                    angle += 1;
-
-                    // forge logo
                     if (forgeLogo) {
-                        setColor(backgroundColor);
-                        float fw = (float) forgeTexture.getWidth() / 2 / 2;
-                        float fh = (float) forgeTexture.getHeight() / 2 / 2;
+                        float fw = (float) forgeTexture.getWidth() / 2f * scale;
+                        float fh = (float) forgeTexture.getHeight() / 2f * scale;
+
+                        float yOffset = 20 * scale;
+
+                        glPushMatrix();
                         if (rotate) {
                             float sh = Math.max(fw, fh);
-                            glTranslatef(320 + w / 2 - sh - logoOffset, 240 + h / 2 - sh - logoOffset, 0);
+                            glTranslatef(w - sh - logoOffset * scale, h - sh - logoOffset * scale - yOffset, 0);
                             glRotatef(angle, 0, 0, 1);
                         } else {
-                            glTranslatef(320 + w / 2 - fw - logoOffset, 240 + h / 2 - fh - logoOffset, 0);
+                            glTranslatef(w - fw - logoOffset * scale, h - fh - logoOffset * scale - yOffset, 0);
                         }
-                        int f = (angle / 10) % forgeTexture.getFrames();
+                        int f = (int) (angle * ((float)forgeTexture.getFrames() / Frame) % forgeTexture.getFrames());
                         glEnable(GL_TEXTURE_2D);
                         forgeTexture.bind();
                         glBegin(GL_QUADS);
@@ -377,27 +385,53 @@ public class CustomSplash {
                         glVertex2f(fw, -fh);
                         glEnd();
                         glDisable(GL_TEXTURE_2D);
+                        glPopMatrix();
                     }
-                    // We use mutex to indicate safely to the main thread that we're taking the display global lock
-                    // So the main thread can skip processing messages while we're updating.
-                    // There are system setups where this call can pause for a while, because the GL implementation
-                    // is trying to impose a framerate or other thing is occurring. Without the mutex, the main
-                    // thread would delay waiting for the same global display lock
+
+                    glPushMatrix();
+                    setColor(fontColor);
+                    float textPadding = fontRenderer.getStringWidth(getForgeVersionString()) * 2 * scale + 4 * scale;
+                    glTranslatef(w - textPadding, h - 20 * scale, 0);
+                    glScalef(2 * scale, 2 * scale, 1);
+                    glEnable(GL_TEXTURE_2D);
+                    fontRenderer.drawString(getForgeVersionString(), 0, 0, fontColor);
+                    glDisable(GL_TEXTURE_2D);
+                    glPopMatrix();
+
+                    angle += 1;
+
                     mutex.acquireUninterruptibly();
                     Display.update();
-                    // As soon as we're done, we release the mutex. The other thread can now ping the processmessages
-                    // call as often as it wants until we get get back here again
                     mutex.release();
+
                     if (pause) {
                         clearGL();
                         setGL();
                     }
-                    Display.sync(100);
+                    Display.sync(Frame);
                 }
                 clearGL();
             }
 
-            private String getString() {
+            public String getForgeVersionString() {
+                String mcVersion = Loader.instance()
+                    .getMinecraftModContainer()
+                    .getVersion();
+
+                String forgeVersion = Loader.instance()
+                    .getModList()
+                    .stream()
+                    .filter(
+                        mod -> mod.getModId()
+                            .equals("Forge"))
+                    .map(ModContainer::getVersion)
+                    .findFirst()
+                    .orElse("Unknown");
+
+                return mcVersion + "-" + forgeVersion;
+            }
+
+            public String getString() {
                 long startupTime = ManagementFactory.getRuntimeMXBean()
                     .getUptime();
 
@@ -418,11 +452,11 @@ public class CustomSplash {
                 return str;
             }
 
-            private void setColor(int color) {
+            public void setColor(int color) {
                 glColor3ub((byte) ((color >> 16) & 0xFF), (byte) ((color >> 8) & 0xFF), (byte) (color & 0xFF));
             }
 
-            private void drawBox(int w, int h) {
+            public void drawBox(int w, int h) {
                 glBegin(GL_QUADS);
                 glVertex2f(0, 0);
                 glVertex2f(0, h);
@@ -431,8 +465,8 @@ public class CustomSplash {
                 glEnd();
             }
 
-            private void drawBar(ProgressBar b) {
-                String progress = "" + b.getStep() + "/" + b.getSteps();
+            public void drawBar(ProgressBar b) {
+                String progress = b.getStep() + "/" + b.getSteps();
                 glPushMatrix();
                 // title - message
                 setColor(fontColor);
@@ -467,6 +501,9 @@ public class CustomSplash {
             }
 
             private void drawMemoryBar() {
+                int cpuUsage = getSystemCpuUsage();
+                String cpuText = cpuUsage >= 0 ? ("CPU: " + getCpuString(cpuUsage)) : "CPU: N/A";
+
                 int maxMemory = bytesToMb(
                     Runtime.getRuntime()
                         .maxMemory());
@@ -479,67 +516,131 @@ public class CustomSplash {
                 int usedMemory = totalMemory - freeMemory;
                 float usedMemoryPercent = usedMemory / (float) maxMemory;
                 String progress = getMemoryString(usedMemory) + " / " + getMemoryString(maxMemory);
+
+                boolean useArchaic = showArchFixMemory && Loader.isModLoaded("archaicfix")
+                    && ArchaicConfig.showSplashMemoryBar;
+
                 glPushMatrix();
-                // title - message
                 setColor(fontColor);
                 glScalef(2, 2, 1);
                 glEnable(GL_TEXTURE_2D);
-                fontRenderer.drawString("Memory Usage : " + progress, 0, 0, fontColor);
-                glDisable(GL_TEXTURE_2D);
-                glPopMatrix();
-                // border
-                glPushMatrix();
-                glTranslatef(0, textHeight2, 0);
-                setColor(barBorderColor);
-                drawBox(barWidth, barHeight);
-                // interior
-                setColor(barBackgroundColor);
-                glTranslatef(2, 2, 0);
-                drawBox(barWidth - 4, barHeight - 4);
-                // slidy part
+                if (useArchaic) {
+                    // title - separate line
+                    fontRenderer.drawString("Memory Used / Total" + "  " + cpuText, 0, 0, fontColor);
+                    glDisable(GL_TEXTURE_2D);
+                    glPopMatrix();
 
-                long time = System.currentTimeMillis();
-                if (usedMemoryPercent > memoryColorPercent || (time - memoryColorChangeTime > 1000)) {
-                    memoryColorChangeTime = time;
-                    memoryColorPercent = usedMemoryPercent;
-                }
+                    // border
+                    glPushMatrix();
+                    glTranslatef(0, textHeight2, 0);
+                    setColor(barBorderColor);
+                    drawBox(barWidth, barHeight);
 
-                int memoryBarColor;
-                if (memoryColorPercent < 0.75f) {
-                    memoryBarColor = memoryGoodColor;
-                } else if (memoryColorPercent < 0.85f) {
-                    memoryBarColor = memoryWarnColor;
-                } else {
-                    memoryBarColor = memoryLowColor;
-                }
-                if (showTotalMemoryLine) {
+                    // interior
+                    setColor(barBackgroundColor);
+                    glTranslatef(2, 2, 0);
+                    drawBox(barWidth - 4, barHeight - 4);
+
+                    // update memory color
+                    long time = System.currentTimeMillis();
+                    if (usedMemoryPercent > memoryColorPercent || (time - memoryColorChangeTime > 1000)) {
+                        memoryColorChangeTime = time;
+                        memoryColorPercent = usedMemoryPercent;
+                    }
+
+                    int memoryBarColor;
+                    if (memoryColorPercent < 0.75f) memoryBarColor = memoryGoodColor;
+                    else if (memoryColorPercent < 0.85f) memoryBarColor = memoryWarnColor;
+                    else memoryBarColor = memoryLowColor;
+
+                    // total memory line
                     setColor(memoryLowColor);
                     glPushMatrix();
-                    glTranslatef((barWidth - 8) * (totalMemory) / (maxMemory) - 2, 2, 0);
-                    drawBox(2, barHeight - 8);
+                    glTranslatef((float) ((barWidth - 2) * (totalMemory)) / (maxMemory) - 2, 0, 0);
+                    drawBox(2, barHeight - 4);
                     glPopMatrix();
-                }
-                setColor(memoryBarColor);
-                glTranslatef(2, 2, 0);
-                drawBox((barWidth - 8) * (usedMemory) / (maxMemory), barHeight - 8);
 
-                // progress text
-                // String progress = getMemoryString(usedMemory) + " / " + getMemoryString(maxMemory);
-                /*
-                 * glTranslatef(((float)barWidth - 2) / 2 - fontRenderer.getStringWidth(progress), 2, 0);
-                 * setColor(fontColor);
-                 * glScalef(2, 2, 1);
-                 * glEnable(GL_TEXTURE_2D);
-                 * fontRenderer.drawString(progress, 0, 0, 0x000000);
-                 */
+                    // used memory bar
+                    setColor(memoryBarColor);
+                    glTranslatef(2, 2, 0);
+                    drawBox((barWidth - 8) * (usedMemory) / (maxMemory), barHeight - 8);
+
+                    // progress text centered on bar
+                    glTranslatef(((float) barWidth - 2) / 2 - fontRenderer.getStringWidth(progress), -1, 0);
+                    setColor(fontColor);
+                    glScalef(2, 2, 1);
+                    glEnable(GL_TEXTURE_2D);
+                    fontRenderer.drawString(progress, 0, 0, fontColor);
+
+                } else {
+                    // title and progress in one line
+                    String text = "Memory Usage : " + progress + "  " + cpuText;
+                    int textWidth = fontRenderer.getStringWidth(text);
+                    int textX = (barWidth - textWidth * 2) / 4;
+
+                    fontRenderer.drawString(text, textX, 0, fontColor);
+                    glDisable(GL_TEXTURE_2D);
+                    glPopMatrix();
+
+                    // border
+                    glPushMatrix();
+                    glTranslatef(0, textHeight2, 0);
+                    setColor(barBorderColor);
+                    drawBox(barWidth, barHeight);
+
+                    // interior
+                    setColor(barBackgroundColor);
+                    glTranslatef(2, 2, 0);
+                    drawBox(barWidth - 4, barHeight - 4);
+
+                    // update memory color
+                    long time = System.currentTimeMillis();
+                    if (usedMemoryPercent > memoryColorPercent || (time - memoryColorChangeTime > 1000)) {
+                        memoryColorChangeTime = time;
+                        memoryColorPercent = usedMemoryPercent;
+                    }
+
+                    int memoryBarColor;
+                    if (memoryColorPercent < 0.75f) memoryBarColor = memoryGoodColor;
+                    else if (memoryColorPercent < 0.85f) memoryBarColor = memoryWarnColor;
+                    else memoryBarColor = memoryLowColor;
+
+                    // optional total memory line
+                    if (showTotalMemoryLine) {
+                        setColor(memoryLowColor);
+                        glPushMatrix();
+                        glTranslatef((float) ((barWidth - 8) * (totalMemory)) / (maxMemory) - 2, 2, 0);
+                        drawBox(2, barHeight - 8);
+                        glPopMatrix();
+                    }
+
+                    // used memory bar
+                    setColor(memoryBarColor);
+                    glTranslatef(2, 2, 0);
+                    drawBox((barWidth - 8) * (usedMemory) / (maxMemory), barHeight - 8);
+                }
                 glPopMatrix();
             }
 
-            private String getMemoryString(int memory) {
+            public String getMemoryString(int memory) {
                 return StringUtils.leftPad(Integer.toString(memory), 4, ' ') + " MB";
             }
 
-            private void setGL() {
+            public String getCpuString(int cpu) {
+                return StringUtils.leftPad(Integer.toString(cpu), 3, ' ') + " %";
+            }
+
+            public int getSystemCpuUsage() {
+                com.sun.management.OperatingSystemMXBean os = (com.sun.management.OperatingSystemMXBean) java.lang.management.ManagementFactory
+                    .getOperatingSystemMXBean();
+
+                double load = os.getSystemCpuLoad();
+                if (load < 0) return -1;
+
+                return (int) (load * 100);
+            }
+
+            public void setGL() {
                 lock.lock();
                 try {
                     Display.getDrawable()
@@ -559,7 +660,7 @@ public class CustomSplash {
                 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             }
 
-            private void clearGL() {
+            public void clearGL() {
                 Minecraft mc = Minecraft.getMinecraft();
                 mc.displayWidth = Display.getWidth();
                 mc.displayHeight = Display.getHeight();
@@ -580,18 +681,15 @@ public class CustomSplash {
                 }
             }
         });
-        thread.setUncaughtExceptionHandler(new UncaughtExceptionHandler() {
-
-            public void uncaughtException(Thread t, Throwable e) {
-                FMLLog.log(Level.ERROR, e, "Splash thread Exception");
-                threadError = e;
-            }
+        thread.setUncaughtExceptionHandler((t, e) -> {
+            FMLLog.log(Level.ERROR, e, "Splash thread Exception");
+            threadError = e;
         });
         thread.start();
         checkThreadState();
     }
 
-    private static void checkThreadState() {
+    public static void checkThreadState() {
         if (thread.getState() == Thread.State.TERMINATED || threadError != null) {
             throw new IllegalStateException("Splash thread", threadError);
         }
@@ -601,7 +699,7 @@ public class CustomSplash {
      * Call before you need to explicitly modify GL context state during loading.
      * Resource loading doesn't usually require this call.
      * Call {@link #resume()} when you're done.
-     * 
+     *
      * @deprecated not a stable API, will break, don't use this yet
      */
     @Deprecated
@@ -680,12 +778,11 @@ public class CustomSplash {
         }
     }
 
-    private static boolean disableSplash() {
+    public static boolean disableSplash() {
         File configFile = new File(Minecraft.getMinecraft().mcDataDir, "config/splash.properties");
         File parent = configFile.getParentFile();
         if (!parent.exists()) parent.mkdirs();
 
-        FileReader r = null;
         enabled = false;
         config.setProperty("enabled", "false");
 
@@ -702,7 +799,7 @@ public class CustomSplash {
         return true;
     }
 
-    private static IResourcePack createResourcePack(File file) {
+    public static IResourcePack createResourcePack(File file) {
         if (file.isDirectory()) {
             return new FolderResourcePack(file);
         } else {
@@ -710,16 +807,16 @@ public class CustomSplash {
         }
     }
 
-    private static final IntBuffer buf = BufferUtils.createIntBuffer(4 * 1024 * 1024);
+    public static final IntBuffer buf = BufferUtils.createIntBuffer(4 * 1024 * 1024);
 
-    private static class Texture {
+    public static class Texture {
 
-        private final ResourceLocation location;
-        private final int name;
-        private final int width;
-        private final int height;
-        private final int frames;
-        private final int size;
+        public final ResourceLocation location;
+        public final int name;
+        public final int width;
+        public final int height;
+        public final int frames;
+        public final int size;
 
         public Texture(ResourceLocation location) {
             InputStream s = null;
@@ -811,7 +908,7 @@ public class CustomSplash {
         }
 
         public int getFrames() {
-            return frames;
+            return frames + 1;
         }
 
         public int getSize() {
@@ -827,11 +924,14 @@ public class CustomSplash {
         }
 
         public float getU(int frame, float u) {
-            return width * (frame % (size / width) + u) / size;
+            return width * (frame % ((float) size / width) + u) / size;
+            //return u;
         }
 
         public float getV(int frame, float v) {
-            return height * (frame / (size / width) + v) / size;
+            int currentFrame = frame % frames * width / size;
+            return height * ( (int) (currentFrame % ((float) size / width)) + v) / size;
+            //return v;
         }
 
         public void texCoord(int frame, float u, float v) {
@@ -878,7 +978,7 @@ public class CustomSplash {
         }
     }
 
-    private static InputStream open(ResourceLocation loc) throws IOException {
+    public static InputStream open(ResourceLocation loc) throws IOException {
         if (miscPack.resourceExists(loc)) {
             return miscPack.getInputStream(loc);
         } else if (fmlPack.resourceExists(loc)) {
@@ -887,7 +987,7 @@ public class CustomSplash {
         return mcPack.getInputStream(loc);
     }
 
-    private static int bytesToMb(long bytes) {
+    public static int bytesToMb(long bytes) {
         return (int) (bytes / 1024L / 1024L);
     }
 
