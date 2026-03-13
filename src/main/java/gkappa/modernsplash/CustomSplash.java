@@ -562,6 +562,7 @@ public class CustomSplash {
 
                     // used memory bar
                     setColor(memoryBarColor);
+                    glPushMatrix();
                     glTranslatef(2, 2, 0);
                     drawBox((barWidth - 8) * (usedMemory) / (maxMemory), barHeight - 8);
 
@@ -571,6 +572,7 @@ public class CustomSplash {
                     glScalef(2, 2, 1);
                     glEnable(GL_TEXTURE_2D);
                     fontRenderer.drawString(progress, 0, 0, fontColor);
+                    glPopMatrix();
 
                 } else {
                     // title and progress in one line
